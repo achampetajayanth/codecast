@@ -1,0 +1,9 @@
+.custom-card {
+  background-color: #ADBBDA; /* Box margin color */
+}
+
+.custom-card-body {
+  background-color: #3D52A0; /* Card body color */
+  box-shadow: 0 4px 8px 0 #ADBBDA, 0 6px 20px 0 #ADBBDA; /* #ADBBDA box shadow */
+  border: 1px solid #ADBBDA;
+}
