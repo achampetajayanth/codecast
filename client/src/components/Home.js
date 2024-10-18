@@ -20,6 +20,7 @@ function Home() {
   const joinRoom=()=>{
     if(!roomId||!username){
       toast.error("room id and username are requierd");
+      return;
     }
     navigate(`/editor/${roomId}`,{
       state:{
@@ -67,7 +68,7 @@ function Home() {
                 Don't have a room ID? create{" "}
                 <span
                     onClick={generateRoomId}
-                  className=" text-success p-2"
+                  className="text-primary p-2"
                   style={{ cursor: "pointer" }}
                 >
                    {" "}
