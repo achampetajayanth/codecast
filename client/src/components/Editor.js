@@ -119,7 +119,7 @@ function Editor({ socketRef, roomId }) {
 
     try {
       // Initialize the GoogleGenerativeAI instance with the API key
-      const genAI = new GoogleGenerativeAI("AIzaSyDE4DwzM35iVXJcKMv1X0zkcVzGvnpIGQc"); // Make sure your API key is stored in .env
+      const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({
         model: "gemini-1.5-flash",
       });

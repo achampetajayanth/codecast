@@ -109,7 +109,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("code-change", ({ roomId, code, language }) => {
-    socket.in(roomId).emit("code-change", { code, language });
+    socket.broadcast.to(roomId).emit("code-change", { code, language });
   });
 
   socket.on("output-change", ({ roomId, output }) => {
