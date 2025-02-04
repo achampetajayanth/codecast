@@ -1,46 +1,54 @@
 require('dotenv').config();
 const express = require("express");
-const app = express();
-const http = require('http');
+const cors = require("cors");
+const http = require("http");
 const { Server } = require("socket.io");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { exec } = require('child_process');
-const fs = require('fs').promises;
-const path = require('path');
+const { exec } = require("child_process");
+const fs = require("fs").promises;
+const path = require("path");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    methods: ["GET", "POST"]
+  }
+});
+
+// Enable CORS
+app.use(cors());
+app.use(express.json());
 
 // Initialize Gemini AI
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
 
-const server = http.createServer(app);
-const io = new Server(server);
-
-app.use(express.json());  // Middleware to parse JSON bodies
-
-const tempDir = path.join(__dirname, 'temp');
-
-// Ensure temp directory exists
-fs.mkdir(tempDir, { recursive: true });
+// Temporary Directory for code execution
+const tempDir = path.join(__dirname, "temp");
+fs.mkdir(tempDir, { recursive: true }).catch(console.error);
 
 const LANGUAGE_CONFIGS = {
-  javascript: { extension: 'js' },
-  python: { extension: 'py' },
-  java: { extension: 'java' },
-  cpp: { extension: 'cpp' }
+  javascript: { extension: "js" },
+  python: { extension: "py" },
+  java: { extension: "java" },
+  cpp: { extension: "cpp" }
 };
 
 const userSocketMap = {};
+
+// Function to get connected clients in a room
 const getAllConnectedClients = (roomId) => {
-    return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
-      (socketId) => {
-        return {
-          socketId,
-          username: userSocketMap[socketId],
-        };
-      }
-    );
+  return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
+    (socketId) => ({
+      socketId,
+      username: userSocketMap[socketId],
+    })
+  );
 };
 
+// Function to compile and run code
 const compileAndRun = async (code, language) => {
   const fileName = `temp_${Date.now()}.${LANGUAGE_CONFIGS[language].extension}`;
   const filePath = path.join(tempDir, fileName);
@@ -49,7 +57,7 @@ const compileAndRun = async (code, language) => {
     await fs.writeFile(filePath, code);
 
     switch (language) {
-      case 'javascript':
+      case "javascript":
         return new Promise((resolve, reject) => {
           exec(`node ${filePath}`, (error, stdout, stderr) => {
             if (error) return reject(stderr || error.message);
@@ -57,7 +65,7 @@ const compileAndRun = async (code, language) => {
           });
         });
 
-      case 'python':
+      case "python":
         return new Promise((resolve, reject) => {
           exec(`python ${filePath}`, (error, stdout, stderr) => {
             if (error) return reject(stderr || error.message);
@@ -65,7 +73,7 @@ const compileAndRun = async (code, language) => {
           });
         });
 
-      case 'java':
+      case "java":
         return new Promise((resolve, reject) => {
           exec(`javac ${filePath} && java -cp ${tempDir} Main`, (error, stdout, stderr) => {
             if (error) return reject(stderr || error.message);
@@ -73,8 +81,8 @@ const compileAndRun = async (code, language) => {
           });
         });
 
-      case 'cpp':
-        const outputPath = path.join(tempDir, 'output');
+      case "cpp":
+        const outputPath = path.join(tempDir, "output");
         return new Promise((resolve, reject) => {
           exec(`g++ ${filePath} -o ${outputPath} && ${outputPath}`, (error, stdout, stderr) => {
             if (error) return reject(stderr || error.message);
@@ -83,19 +91,20 @@ const compileAndRun = async (code, language) => {
         });
 
       default:
-        throw new Error('Unsupported language');
+        throw new Error("Unsupported language");
     }
   } finally {
     try {
-      await fs.unlink(filePath);  // Clean up temporary file
+      await fs.unlink(filePath);
     } catch (e) {
-      console.error('Cleanup failed:', e);
+      console.error("Cleanup failed:", e);
     }
   }
 };
 
+// WebSocket Events
 io.on("connection", (socket) => {
-  socket.on('JOIN', ({ roomId, username }) => {
+  socket.on("JOIN", ({ roomId, username }) => {
     userSocketMap[socket.id] = username;
     socket.join(roomId);
     const clients = getAllConnectedClients(roomId);
@@ -129,19 +138,21 @@ io.on("connection", (socket) => {
   });
 });
 
-app.post('/api/compile', async (req, res) => {
+// API Endpoint for Code Compilation
+app.post("/api/compile", async (req, res) => {
   const { code, language } = req.body;
 
   try {
     const output = await compileAndRun(code, language);
     res.json({ success: true, output });
   } catch (error) {
-    console.error('Compilation Error:', error.message); // Log the error for debugging
+    console.error("Compilation Error:", error.message);
     res.json({ success: false, output: error.message });
   }
 });
 
-app.post('/api/analyze-complexity', async (req, res) => {
+// API Endpoint for Complexity Analysis
+app.post("/api/analyze-complexity", async (req, res) => {
   const { code, language } = req.body;
 
   try {
@@ -156,8 +167,7 @@ Format the response as JSON with keys: timeComplexity, spaceComplexity, and expl
     const result = await model.generateContent(prompt);
     const response = result.response;
     const analysisText = response.text();
-    
-    // Attempt to parse the JSON response
+
     try {
       const analysis = JSON.parse(analysisText);
       console.log("Parsed Analysis:", analysis);
@@ -173,5 +183,6 @@ Format the response as JSON with keys: timeComplexity, spaceComplexity, and expl
   }
 });
 
-const PORT = process.env.PORT || 5000;
+// Start the server
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
